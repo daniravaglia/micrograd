@@ -3,84 +3,78 @@ import collections
 class Value:
     """ stores a single scalar value and its gradient """
 
-    def __init__(self, data, _children=(), _op=''):
+    def __init__(self, data, _children=(), _parents=(), _op=''):
         self.data = data
         self.grad = 0
         # internal variables used for autograd graph construction
         self._backward = lambda: None
         self._prev = set(_children)
+        self._parents = set(_parents)
+        self.visited = False
         self._op = _op # the op that produced this node, for graphviz / debugging / etc
 
     def __add__(self, other):
         other = other if isinstance(other, Value) else Value(other)
-        out = Value(self.data + other.data, (self, other), '+')
+        out = Value(self.data + other.data, (self, other), (), '+')
 
         def _backward():
             self.grad += out.grad
             other.grad += out.grad
-        out._backward = _backward
+            if out in self._parents: self._parents.remove(out) 
+            if out in other._parents: other._parents.remove(out) 
 
+        out._backward = _backward
+        self._parents.add(out)
+        other._parents.add(out)
         return out
 
     def __mul__(self, other):
         other = other if isinstance(other, Value) else Value(other)
-        out = Value(self.data * other.data, (self, other), '*')
+        out = Value(self.data * other.data, (self, other), (), '*')
 
         def _backward():
             self.grad += other.data * out.grad
             other.grad += self.data * out.grad
-        out._backward = _backward
+            if out in self._parents: self._parents.remove(out) 
+            if out in other._parents: other._parents.remove(out) 
 
+        out._backward = _backward
+        self._parents.add(out)
+        other._parents.add(out)
         return out
 
     def __pow__(self, other):
         assert isinstance(other, (int, float)), "only supporting int/float powers for now"
-        out = Value(self.data**other, (self,), f'**{other}')
+        out = Value(self.data**other, (self,), (), f'**{other}')
 
         def _backward():
             self.grad += (other * self.data**(other-1)) * out.grad
+            if out in self._parents: self._parents.remove(out) 
         out._backward = _backward
-
+        self._parents.add(out)
         return out
 
     def relu(self):
-        out = Value(0 if self.data < 0 else self.data, (self,), 'ReLU')
+        out = Value(0 if self.data < 0 else self.data, (self,), (), 'ReLU')
 
         def _backward():
             self.grad += (out.data > 0) * out.grad
-        out._backward = _backward
+            if out in self._parents: self._parents.remove(out) 
 
+        out._backward = _backward
+        self._parents.add(out)
         return out
 
-    def backward(self):
-        queue = collections.deque()
-        self.grad = 1
-        queue.appendleft(self)
-        visited = []
-        while queue:
-            n = queue.pop()
-            if n in visited:
-                continue
-            n._backward()
-            visited.append(n)
-            for v in n._prev:
-                queue.appendleft(v)
+    
 
-        # topological order all of the children in the graph
-        """topo = []
-        visited = set()
-        def build_topo(v):
-            if v not in visited:
-                visited.add(v)
-                for child in v._prev:
-                    build_topo(child)
-                topo.append(v)
-        build_topo(self)
-
-        # go one variable at a time and apply the chain rule to get its gradient
-        self.grad = 1
-        for v in reversed(topo):
-            v._backward()"""
+    def backward(self, init=0):
+        if self.visited or len(self._parents) != 0:
+            return
+        self.grad += init
+        self._backward()
+        self.visited = True
+        for n in self._prev:
+            n.backward()
 
     def __neg__(self): # -self
         return self * -1

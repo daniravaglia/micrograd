@@ -8,7 +8,7 @@ def test_sanity_check():
     q = z.relu() + z * x
     h = (z * z).relu()
     y = h + q + q * x
-    y.backward()
+    y.backward(1)
     xmg, ymg = x, y
 
     x = torch.Tensor([-4.0]).double()
@@ -39,7 +39,7 @@ def test_more_ops():
     f = e**2
     g = f / 2.0
     g += 10.0 / f
-    g.backward()
+    g.backward(1)
     amg, bmg, gmg = a, b, g
 
     a = torch.Tensor([-4.0]).double()
