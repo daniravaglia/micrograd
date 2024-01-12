@@ -1,3 +1,4 @@
+import collections
 
 class Value:
     """ stores a single scalar value and its gradient """
@@ -52,9 +53,21 @@ class Value:
         return out
 
     def backward(self):
+        queue = collections.deque()
+        self.grad = 1
+        queue.appendleft(self)
+        visited = []
+        while queue:
+            n = queue.pop()
+            if n in visited:
+                continue
+            n._backward()
+            visited.append(n)
+            for v in n._prev:
+                queue.appendleft(v)
 
         # topological order all of the children in the graph
-        topo = []
+        """topo = []
         visited = set()
         def build_topo(v):
             if v not in visited:
@@ -67,7 +80,7 @@ class Value:
         # go one variable at a time and apply the chain rule to get its gradient
         self.grad = 1
         for v in reversed(topo):
-            v._backward()
+            v._backward()"""
 
     def __neg__(self): # -self
         return self * -1
